@@ -1,27 +1,50 @@
-"""No de atendimento: faz a triagem do prontuario e classifica a urgencia."""
+"""No de atendimento: faz a triagem do prontuario e escolhe o destino."""
 
-from typing import Literal # Para definir tipos literais como "urgente" e "nao_urgente"
-from pydantic import BaseModel, Field # 
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
 from src.services.llm import modelo
 from src.state import State
 
 PROMPT_TRIAGEM = """Voce e um profissional de triagem em um servico de saude.
-Leia o prontuario e classifique o atendimento:
+Leia o prontuario e classifique o destino do atendimento:
 
-- "urgente": risco imediato a vida ou de agravamento rapido. Exemplos: dor toracica,
-  falta de ar, rebaixamento de consciencia, sinais de AVC, sangramento ativo,
-  sinais vitais instaveis, trauma grave, reacao alergica grave, dor intensa e subita.
-- "nao_urgente": quadro estavel, queixas leves ou cronicas, rotina, renovacao de
-  receita, acompanhamento.
+- "dermatologico": queixa ou achado predominantemente de pele ou anexos.
+  Exemplos: rash, prurido, lesoes cutaneas, urticaria, queimadura cutanea,
+  infeccao de pele, erupcao, eczema, psoriasis.
+- "cardiologico": queixa ou achado predominantemente cardiaco. Exemplos: dor
+  toracica, palpitacao, sincope suspeita cardiaca, edema com dispneia sugestiva
+  de insuficiencia cardiaca, sinais de sindrome coronariana aguda.
+- "neurologico": queixa ou achado predominantemente neurologico, mesmo quando
+  urgente. Exemplos: deficit motor ou sensitivo focal, desvio de rima, alteracao
+  aguda da fala, suspeita de AVC, crise convulsiva, cefaleia subita e intensa
+  ("em trovao"), rebaixamento de consciencia de causa neurologica, vertigem com
+  sinais focais (diplopia, disartria, ataxia).
+- "urgente": risco imediato a vida ou de agravamento rapido, sem predominancia
+  cardiaca, neurologica nem dermatologica. Exemplos: sangramento ativo, trauma
+  grave, reacao alergica grave sistemica, dor intensa e subita nao toracica,
+  sinais vitais instaveis por causa nao tipicamente cardiologica, neurologica
+  nem cutanea.
+- "clinicogeral": quadro estavel, queixas leves ou cronicas, rotina, renovacao
+  de receita, acompanhamento em atencao primaria — nao urgente.
 
-Na duvida, classifique como "urgente".
+Prioridade na duvida: cardiologico > neurologico > dermatologico > urgente >
+clinicogeral.
+Tambem informe se o caso e "urgente" ou "nao_urgente" no nivel de urgencia geral
+(especialidades com risco clinico imediato contam como urgente).
 Justifique em uma ou duas frases, citando os achados do prontuario."""
 
-# Modelo de classificacao de urgencia do atendimento
+
 class Classificacao(BaseModel):
     """Resultado da triagem."""
 
-    urgencia: Literal["urgente", "nao_urgente"] = Field(description="Nivel de urgencia")
+    destino: Literal[
+        "dermatologico", "cardiologico", "neurologico", "urgente", "clinicogeral"
+    ] = Field(description="Destino do atendimento apos a triagem")
+    urgencia: Literal["urgente", "nao_urgente"] = Field(
+        description="Nivel de urgencia geral"
+    )
     justificativa: str = Field(description="Motivo da classificacao")
 
 
@@ -34,4 +57,8 @@ def atendimento(state: State) -> dict:
             ("human", state.prontuario),
         ]
     )
-    return {"urgencia": resultado.urgencia, "justificativa": resultado.justificativa}
+    return {
+        "destino": resultado.destino,
+        "urgencia": resultado.urgencia,
+        "justificativa": resultado.justificativa,
+    }

@@ -1,0 +1,57 @@
+"""No de atendimento: faz a triagem do prontuario, classifica a urgencia e a especialidade."""
+
+from typing import Literal # Para definir tipos literais como "urgente" e "nao_urgente"
+from pydantic import BaseModel, Field # 
+from src.services.llm import modelo
+from src.services.observabilidade import anotar_run
+from src.state import State
+
+PROMPT_TRIAGEM = """Voce e um profissional de triagem em um servico de saude.
+Leia o prontuario e classifique o atendimento:
+
+- "urgente": risco imediato a vida ou de agravamento rapido. Exemplos: dor toracica,
+  falta de ar, rebaixamento de consciencia, sinais de AVC, sangramento ativo,
+  sinais vitais instaveis, trauma grave, reacao alergica grave, dor intensa e subita.
+- "nao_urgente": quadro estavel, queixas leves ou cronicas, rotina, renovacao de
+  receita, acompanhamento.
+
+Na duvida, classifique como "urgente".
+
+Indique tambem a especialidade:
+
+- "cardiologia": a queixa principal e cardiovascular. Exemplos: dor toracica de
+  caracteristica cardiaca, palpitacoes, sincope de provavel causa cardiaca, sinais de
+  insuficiencia cardiaca, crise hipertensiva, arritmia.
+- "neurologia": a queixa principal e neurologica. Exemplos: sinais de AVC (deficit
+  motor, desvio de rima, alteracao da fala), crise convulsiva, cefaleia subita e
+  intensa, rebaixamento de consciencia sem causa cardiaca, vertigem com sinais
+  neurologicos, parestesias.
+- "geral": qualquer outro caso.
+
+Justifique em uma ou duas frases, citando os achados do prontuario."""
+
+# Modelo de classificacao de urgencia do atendimento
+class Classificacao(BaseModel):
+    """Resultado da triagem."""
+
+    urgencia: Literal["urgente", "nao_urgente"] = Field(description="Nivel de urgencia")
+    especialidade: Literal["cardiologia", "neurologia", "geral"] = Field(description="Especialidade indicada")
+    justificativa: str = Field(description="Motivo da classificacao")
+
+
+def atendimento(state: State) -> dict:
+    """Classifica o prontuario e devolve so os campos que altera no state."""
+    triador = modelo().with_structured_output(Classificacao)
+    resultado = triador.invoke(
+        [
+            ("system", PROMPT_TRIAGEM),
+            ("human", state.prontuario),
+        ]
+    )
+    # No LangSmith: permite filtrar e agrupar os graficos por especialidade e urgencia.
+    anotar_run({"especialidade": resultado.especialidade, "urgencia": resultado.urgencia})
+    return {
+        "urgencia": resultado.urgencia,
+        "especialidade": resultado.especialidade,
+        "justificativa": resultado.justificativa,
+    }

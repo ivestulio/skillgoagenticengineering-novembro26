@@ -1,0 +1,15 @@
+# Segredos: nunca entram na imagem.
+.env
+
+# Ambiente local, caches e arquivos gerados.
+.venv/
+.cache/
+.langgraph_api/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Nao sao necessarios para rodar o sistema.
+.git/
+notebooks/
+docs/

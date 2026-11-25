@@ -1,0 +1,18 @@
+services:
+  susia:
+    build: .
+    image: susia
+    # Variaveis do modelo (e do LangSmith) lidas do .env da sua maquina.
+    env_file: .env
+    ports:
+      - "2024:2024"
+    volumes:
+      # Indice do CID-10: gerado uma vez e reaproveitado entre execucoes
+      # (sobrevive a docker compose down e a um novo build).
+      - cid10-cache:/app/.cache
+    # Mantem a entrada do terminal aberta, para responder a aprovacao humana.
+    stdin_open: true
+    tty: true
+
+volumes:
+  cid10-cache:
